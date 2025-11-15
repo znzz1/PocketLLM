@@ -1,5 +1,5 @@
 """Chat API router."""
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
 from typing import Annotated, List
 from schemas.chat import ChatRequest, ChatResponse, ChatHistory
@@ -266,3 +266,160 @@ async def send_message_stream(
             "Connection": "keep-alive",
         }
     )
+
+@router.websocket("/ws")
+async def websocket_chat(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time chat.
+    
+    Architecture Reference: HW3 Section 3.2.2 - WebSocket Support
+    - Accepts WebSocket connections from Next.js API Routes
+    - Validates JWT token from query parameters
+    - Streams LLM responses token-by-token
+    """
+    await websocket.accept()
+    
+    try:
+        # Get token from query parameters
+        token = websocket.query_params.get("token")
+        if not token:
+            await websocket.send_json({"type": "error", "message": "Authentication required"})
+            await websocket.close(code=1008)
+            return
+        
+        # Validate token
+        try:
+            token_data = deps.auth_service.verify_token(token)
+            if not token_data:
+                await websocket.send_json({"type": "error", "message": "Invalid token"})
+                await websocket.close(code=1008)
+                return
+        except Exception as e:
+            await websocket.send_json({"type": "error", "message": "Authentication failed"})
+            await websocket.close(code=1008)
+            return
+        
+        deps.monitoring_service.increment_request_count()
+        
+        # WebSocket message loop
+        while True:
+            # Receive message from client
+            data = await websocket.receive_json()
+            
+            message_type = data.get("type")
+            
+            if message_type == "chat":
+                # Extract request data
+                prompt = data.get("prompt")
+                session_id = data.get("session_id")
+                max_tokens = data.get("max_tokens", 512)
+                temperature = data.get("temperature", 0.7)
+                
+                if not prompt:
+                    await websocket.send_json({"type": "error", "message": "Prompt required"})
+                    continue
+                
+                # Create or get session
+                if not session_id:
+                    session_id = deps.session_service.create_session(token_data.sub)
+                else:
+                    session = deps.session_service.get_session(session_id)
+                    if not session or session.user_id != token_data.sub:
+                        await websocket.send_json({"type": "error", "message": "Invalid session"})
+                        continue
+                
+                # Add user message to session
+                deps.session_service.add_message(
+                    session_id=session_id,
+                    role="user",
+                    content=prompt,
+                    tokens_used=None
+                )
+                
+                # Get conversation history
+                session = deps.session_service.get_session(session_id)
+                conversation_history = session.messages if session else []
+                
+                # Build formatted prompt with TinyLlama-Chat format
+                formatted_prompt = "<|system|>\nYou are a helpful AI assistant. Provide clear, direct answers.</s>\n"
+                
+                for msg in conversation_history[:-1]:
+                    if msg.role == "user":
+                        formatted_prompt += f"<|user|>\n{msg.content}</s>\n"
+                    elif msg.role == "assistant":
+                        formatted_prompt += f"<|assistant|>\n{msg.content}</s>\n"
+                
+                formatted_prompt += f"<|user|>\n{prompt}</s>\n<|assistant|>\n"
+                
+                # Send start event
+                message_id = str(uuid.uuid4())
+                await websocket.send_json({
+                    "type": "start",
+                    "session_id": session_id,
+                    "message_id": message_id
+                })
+                
+                # Stream LLM response
+                full_response = ""
+                try:
+                    token_stream = deps.inference_service.stream_infer(
+                        prompt=formatted_prompt,
+                        max_tokens=max_tokens,
+                        temperature=temperature
+                    )
+                    
+                    for token in token_stream:
+                        if token:
+                            full_response += token
+                            await websocket.send_json({
+                                "type": "token",
+                                "content": token
+                            })
+                
+                except Exception as e:
+                    await websocket.send_json({
+                        "type": "error",
+                        "message": f"Error generating response: {str(e)}"
+                    })
+                    continue
+                
+                # Add assistant message to session
+                tokens_used = len(full_response.split())
+                deps.session_service.add_message(
+                    session_id=session_id,
+                    role="assistant",
+                    content=full_response,
+                    tokens_used=tokens_used
+                )
+                
+                # Send done event
+                await websocket.send_json({
+                    "type": "done",
+                    "message_id": message_id,
+                    "session_id": session_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                })
+            
+            elif message_type == "ping":
+                # Heartbeat
+                await websocket.send_json({"type": "pong"})
+            
+            else:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unknown message type: {message_type}"
+                })
+    
+    except WebSocketDisconnect:
+        print("WebSocket disconnected")
+    except Exception as e:
+        print(f"WebSocket error: {e}")
+        try:
+            await websocket.send_json({"type": "error", "message": str(e)})
+        except:
+            pass
+    finally:
+        try:
+            await websocket.close()
+        except:
+            pass
