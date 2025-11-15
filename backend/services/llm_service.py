@@ -68,7 +68,8 @@ class LLMEngine:
                 top_p=settings.MODEL_TOP_P,
                 echo=False,
                 stream=stream,
-                stop=["</s>", "<|user|>", "<|system|>", "\nUser:", "\nAI:", "\nAssistant:", "User:", "AI:"],  # Stop tokens
+                stop=["</s>", "<|user|>", "<|system|>", "\nUser:", "\nAI:", "\nAssistant:", "User:", "AI:",
+                      "\nBest regards", "Best regards", "\nSincerely", "Sincerely", "\n\n---", "\n\nNote:"],  # Stop tokens including signatures
                 repeat_penalty=1.1  # Penalize repetition to avoid dialogue loops
             )
 
@@ -87,11 +88,13 @@ class LLMEngine:
     def _stream_output(self, output) -> Iterator[str]:
         """Stream output tokens."""
         buffer = ""
+        full_text = ""
         first_token = True
         for chunk in output:
             token = chunk['choices'][0]['text']
             if token:
                 buffer += token
+                full_text += token
                 # Clean first token if it starts with dialogue prefix
                 if first_token:
                     buffer = self._clean_response(buffer)
@@ -100,17 +103,35 @@ class LLMEngine:
                         buffer = ""
                         first_token = False
                 else:
+                    # Check if we're hitting a signature pattern
+                    if any(sig in full_text for sig in ["\nBest regards", "Best regards", "\nSincerely", ", ai assistant"]):
+                        # Stop streaming if we detect a signature
+                        break
                     yield token
 
     def _clean_response(self, text: str) -> str:
-        """Remove dialogue prefixes from model output."""
+        """Remove dialogue prefixes and signatures from model output."""
         # Remove common dialogue prefixes
         prefixes = ["AI:", "AI :", "Assistant:", "Assistant :", "A:", "A :", "User:", "User :"]
         for prefix in prefixes:
             if text.startswith(prefix):
                 text = text[len(prefix):].lstrip()
                 break
-        return text
+
+        # Remove signatures and sign-offs
+        signatures = [
+            "\nBest regards", "Best regards",
+            "\nSincerely", "Sincerely",
+            "\nRegards", "Regards",
+            "\n\nBest", "\n\nSincerely",
+            ", ai assistant", ",\nai assistant",
+            "[Request interrupted by user]"
+        ]
+        for signature in signatures:
+            if signature in text:
+                text = text.split(signature)[0]
+
+        return text.strip()
 
     def _mock_generate(self, prompt: str, stream: bool) -> str | Iterator[str]:
         """Generate mock response when model not available."""
