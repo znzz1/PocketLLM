@@ -60,7 +60,11 @@ models/*.safetensors
 .idea/
 *.swp
 *.swo
+.claude/
 
 # OS
 .DS_Store
 Thumbs.db
+
+*.pdf
+HW*.md

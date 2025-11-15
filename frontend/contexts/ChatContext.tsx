@@ -59,7 +59,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         },
         body: JSON.stringify({
           prompt: content,
-          sessionId: sessionId || undefined,
+          session_id: sessionId || undefined,
         }),
       })
 
@@ -71,17 +71,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       // Add assistant response
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: data.message_id,
         role: 'assistant',
         content: data.response,
-        timestamp: new Date(),
+        timestamp: new Date(data.timestamp),
       }
 
       setMessages((prev) => [...prev, assistantMessage])
 
       // Update session ID if new
-      if (data.sessionId && !sessionId) {
-        setSessionId(data.sessionId)
+      if (data.session_id && !sessionId) {
+        setSessionId(data.session_id)
       }
     } catch (error) {
       console.error('Send message error:', error)

@@ -62,12 +62,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       const data = await response.json()
 
-      setToken(data.token)
-      setUser(data.user)
+      // Transform backend response to match our User interface
+      const user: User = {
+        id: data.user_id,
+        username: data.username,
+        role: data.is_admin ? 'admin' : 'user',
+      }
+
+      setToken(data.access_token)
+      setUser(user)
 
       // Persist to localStorage
-      localStorage.setItem('auth_token', data.token)
-      localStorage.setItem('user', JSON.stringify(data.user))
+      localStorage.setItem('auth_token', data.access_token)
+      localStorage.setItem('user', JSON.stringify(user))
 
       return true
     } catch (error) {
