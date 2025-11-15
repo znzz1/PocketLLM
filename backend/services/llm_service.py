@@ -89,7 +89,17 @@ class LLMEngine:
 
     def _mock_generate(self, prompt: str, stream: bool) -> str | Iterator[str]:
         """Generate mock response when model not available."""
-        response = "Hello! I'm a mock LLM response. The actual model isn't loaded, but I can demonstrate the streaming functionality. This response will appear word by word in the UI!"
+        # Extract user query from prompt
+        user_query = "your question"
+        if "<|user|>" in prompt:
+            parts = prompt.split("<|user|>")
+            if len(parts) > 1:
+                last_user_msg = parts[-1].split("</s>")[0].strip()
+                if last_user_msg:
+                    user_query = last_user_msg[:50]
+
+        response = f"[MOCK MODE] You asked: '{user_query}'. The actual LLM model is not loaded. To use a real model, please download a GGUF file to ./models/tinyllama-1.1b-chat-q4.gguf"
+
         if stream:
             # Simulate token-by-token streaming
             words = response.split(' ')
