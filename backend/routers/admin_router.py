@@ -53,6 +53,7 @@ async def get_model_info(
 
     return ModelConfig(
         model_path=info["model_path"],
+        model_loaded=info["model_loaded"],
         n_ctx=info["n_ctx"],
         n_threads=info["n_threads"],
         n_gpu_layers=info["n_gpu_layers"],
