@@ -2,6 +2,7 @@
 from typing import Optional, Iterator
 from config import settings
 import os
+import time
 
 try:
     from llama_cpp import Llama
@@ -88,9 +89,19 @@ class LLMEngine:
 
     def _mock_generate(self, prompt: str, stream: bool) -> str | Iterator[str]:
         """Generate mock response when model not available."""
-        response = f"Mock response for: {prompt[:50]}... (Model not loaded)"
+        response = "Hello! I'm a mock LLM response. The actual model isn't loaded, but I can demonstrate the streaming functionality. This response will appear word by word in the UI!"
         if stream:
-            return iter([response])
+            # Simulate token-by-token streaming
+            words = response.split(' ')
+            def word_generator():
+                for i, word in enumerate(words):
+                    # Add small delay to simulate real generation
+                    time.sleep(0.05)  # 50ms delay per word
+                    if i == 0:
+                        yield word
+                    else:
+                        yield ' ' + word
+            return word_generator()
         return response
 
     def get_model_info(self) -> dict:

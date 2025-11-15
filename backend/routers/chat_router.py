@@ -9,6 +9,7 @@ import utils.dependencies as deps
 from datetime import datetime
 import uuid
 import json
+import asyncio
 
 router = APIRouter(prefix="/chat", tags=["Chat"])
 
@@ -236,6 +237,8 @@ async def send_message_stream(
                 if token:
                     full_response += token
                     yield f"data: {json.dumps({'type': 'token', 'content': token})}\n\n"
+                    # Allow event loop to send data immediately
+                    await asyncio.sleep(0)
 
         except Exception as e:
             error_msg = f"Error generating response: {str(e)}"
