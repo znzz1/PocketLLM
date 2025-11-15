@@ -62,7 +62,7 @@ async def send_message(
     formatted_prompt = ""
 
     # Add system message
-    formatted_prompt += "<|system|>\nYou are a helpful assistant. Answer the user's question directly. Do not generate example dialogues or role-play conversations.</s>\n"
+    formatted_prompt += "<|system|>\nYou are a helpful assistant. Answer questions directly without using prefixes like 'AI:', 'Assistant:', or 'User:'. Do not generate example dialogues.</s>\n"
 
     # Add conversation history (skip the last message as we just added it)
     for msg in conversation_history[:-1]:
@@ -206,7 +206,7 @@ async def send_message_stream(
     conversation_history = session.messages if session else []
 
     # Build formatted prompt
-    formatted_prompt = "<|system|>\nYou are a helpful assistant. Answer the user's question directly. Do not generate example dialogues or role-play conversations.</s>\n"
+    formatted_prompt = "<|system|>\nYou are a helpful assistant. Answer questions directly without using prefixes like 'AI:', 'Assistant:', or 'User:'. Do not generate example dialogues.</s>\n"
 
     for msg in conversation_history[:-1]:
         if msg.role == "user":

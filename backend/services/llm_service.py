@@ -75,7 +75,10 @@ class LLMEngine:
             if stream:
                 return self._stream_output(output)
             else:
-                return output['choices'][0]['text'].strip()
+                response = output['choices'][0]['text'].strip()
+                # Remove dialogue prefixes if model generates them
+                response = self._clean_response(response)
+                return response
 
         except Exception as e:
             print(f"Generation error: {e}")
@@ -83,10 +86,31 @@ class LLMEngine:
 
     def _stream_output(self, output) -> Iterator[str]:
         """Stream output tokens."""
+        buffer = ""
+        first_token = True
         for chunk in output:
             token = chunk['choices'][0]['text']
             if token:
-                yield token
+                buffer += token
+                # Clean first token if it starts with dialogue prefix
+                if first_token:
+                    buffer = self._clean_response(buffer)
+                    if buffer:
+                        yield buffer
+                        buffer = ""
+                        first_token = False
+                else:
+                    yield token
+
+    def _clean_response(self, text: str) -> str:
+        """Remove dialogue prefixes from model output."""
+        # Remove common dialogue prefixes
+        prefixes = ["AI:", "AI :", "Assistant:", "Assistant :", "A:", "A :", "User:", "User :"]
+        for prefix in prefixes:
+            if text.startswith(prefix):
+                text = text[len(prefix):].lstrip()
+                break
+        return text
 
     def _mock_generate(self, prompt: str, stream: bool) -> str | Iterator[str]:
         """Generate mock response when model not available."""
