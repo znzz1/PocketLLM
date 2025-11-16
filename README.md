@@ -620,7 +620,6 @@ Academic Use Only - Not for Commercial Distribution
 ## Additional Resources
 
 - **Docker Deployment Guide**: [DOCKER_DEPLOYMENT.md](./DOCKER_DEPLOYMENT.md)
-- **WSL2 Docker Setup**: [WSL2_DOCKER_SETUP.md](./WSL2_DOCKER_SETUP.md)
 - **Architecture Compliance Report**: [ARCHITECTURE_COMPLIANCE.md](./ARCHITECTURE_COMPLIANCE.md)
 
 ## Troubleshooting
