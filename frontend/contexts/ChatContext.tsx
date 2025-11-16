@@ -6,9 +6,10 @@ import { createContext, useContext, useState, ReactNode } from 'react'
  * ChatContext - Global Chat State
  *
  * Architecture Reference: HW3 Section 3.1.2 State Management
+ * Architecture Reference: HW3 Section 3.2.2 Real-time Streaming (SSE through BFF)
  * - React Context API for chat state
- * - Manages messages and session
- * - Provides chat operations
+ * - Manages messages and session via Server-Sent Events
+ * - Provides real-time chat operations through Next.js BFF layer
  */
 
 export interface Message {
@@ -61,7 +62,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
       setMessages((prev) => [...prev, assistantMessage])
 
-      // Call streaming endpoint
+      // Call streaming endpoint through Next.js BFF layer
       const response = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: {
@@ -78,7 +79,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         throw new Error('Failed to send message')
       }
 
-      // Read streaming response
+      // Read streaming response (Server-Sent Events)
       const reader = response.body?.getReader()
       const decoder = new TextDecoder()
 

@@ -2,6 +2,7 @@
 from typing import Optional, Iterator
 from config import settings
 import os
+import time
 
 try:
     from llama_cpp import Llama
@@ -66,13 +67,19 @@ class LLMEngine:
                 temperature=temperature or settings.MODEL_TEMPERATURE,
                 top_p=settings.MODEL_TOP_P,
                 echo=False,
-                stream=stream
+                stream=stream,
+                stop=["</s>", "<|user|>", "<|system|>", "\nUser:", "\nAI:", "\nAssistant:", "User:", "AI:",
+                      "\nBest regards", "Best regards", "\nSincerely", "Sincerely", "\n\n---", "\n\nNote:"],  # Stop tokens including signatures
+                repeat_penalty=1.1  # Penalize repetition to avoid dialogue loops
             )
 
             if stream:
                 return self._stream_output(output)
             else:
-                return output['choices'][0]['text'].strip()
+                response = output['choices'][0]['text'].strip()
+                # Remove dialogue prefixes if model generates them
+                response = self._clean_response(response)
+                return response
 
         except Exception as e:
             print(f"Generation error: {e}")
@@ -80,16 +87,77 @@ class LLMEngine:
 
     def _stream_output(self, output) -> Iterator[str]:
         """Stream output tokens."""
+        buffer = ""
+        full_text = ""
+        first_token = True
         for chunk in output:
             token = chunk['choices'][0]['text']
             if token:
-                yield token
+                buffer += token
+                full_text += token
+                # Clean first token if it starts with dialogue prefix
+                if first_token:
+                    buffer = self._clean_response(buffer)
+                    if buffer:
+                        yield buffer
+                        buffer = ""
+                        first_token = False
+                else:
+                    # Check if we're hitting a signature pattern
+                    if any(sig in full_text for sig in ["\nBest regards", "Best regards", "\nSincerely", ", ai assistant"]):
+                        # Stop streaming if we detect a signature
+                        break
+                    yield token
+
+    def _clean_response(self, text: str) -> str:
+        """Remove dialogue prefixes and signatures from model output."""
+        # Remove common dialogue prefixes
+        prefixes = ["AI:", "AI :", "Assistant:", "Assistant :", "A:", "A :", "User:", "User :"]
+        for prefix in prefixes:
+            if text.startswith(prefix):
+                text = text[len(prefix):].lstrip()
+                break
+
+        # Remove signatures and sign-offs
+        signatures = [
+            "\nBest regards", "Best regards",
+            "\nSincerely", "Sincerely",
+            "\nRegards", "Regards",
+            "\n\nBest", "\n\nSincerely",
+            ", ai assistant", ",\nai assistant",
+            "[Request interrupted by user]"
+        ]
+        for signature in signatures:
+            if signature in text:
+                text = text.split(signature)[0]
+
+        return text.strip()
 
     def _mock_generate(self, prompt: str, stream: bool) -> str | Iterator[str]:
         """Generate mock response when model not available."""
-        response = f"Mock response for: {prompt[:50]}... (Model not loaded)"
+        # Extract user query from prompt
+        user_query = "your question"
+        if "<|user|>" in prompt:
+            parts = prompt.split("<|user|>")
+            if len(parts) > 1:
+                last_user_msg = parts[-1].split("</s>")[0].strip()
+                if last_user_msg:
+                    user_query = last_user_msg[:50]
+
+        response = f"[MOCK MODE] You asked: '{user_query}'. The actual LLM model is not loaded. To use a real model, please download a GGUF file to ./models/tinyllama-1.1b-chat-q4.gguf"
+
         if stream:
-            return iter([response])
+            # Simulate token-by-token streaming
+            words = response.split(' ')
+            def word_generator():
+                for i, word in enumerate(words):
+                    # Add small delay to simulate real generation
+                    time.sleep(0.05)  # 50ms delay per word
+                    if i == 0:
+                        yield word
+                    else:
+                        yield ' ' + word
+            return word_generator()
         return response
 
     def get_model_info(self) -> dict:

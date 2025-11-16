@@ -10,6 +10,7 @@ class SystemMetrics(BaseModel):
     cache_hit_rate: float
     total_requests: int
     active_sessions: int
+    uptime_seconds: float
 
 
 class CacheFlushResponse(BaseModel):
@@ -24,6 +25,7 @@ class ModelConfig(BaseModel):
     model_config = {"protected_namespaces": ()}  # Allow model_ prefix
 
     model_path: str
+    model_loaded: bool
     n_ctx: int
     n_threads: int
     n_gpu_layers: int

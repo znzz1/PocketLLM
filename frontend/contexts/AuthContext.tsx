@@ -14,7 +14,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 interface User {
   id: string
   username: string
-  role: 'user' | 'admin'
+  is_admin: boolean
 }
 
 interface AuthContextType {
@@ -41,6 +41,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storedToken && storedUser) {
       setToken(storedToken)
       setUser(JSON.parse(storedUser))
+      // Refresh cookie for middleware access
+      document.cookie = `auth_token=${storedToken}; path=/; max-age=${30 * 60}; SameSite=Lax`
     }
     setIsLoading(false)
   }, [])
@@ -57,7 +59,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
 
       if (!response.ok) {
-        return false
+        const error = await response.json()
+        throw new Error(error.detail || 'Login failed')
       }
 
       const data = await response.json()
@@ -66,20 +69,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const user: User = {
         id: data.user_id,
         username: data.username,
-        role: data.is_admin ? 'admin' : 'user',
+        is_admin: data.is_admin,
       }
 
       setToken(data.access_token)
       setUser(user)
 
-      // Persist to localStorage
+      // Persist to localStorage and cookie (for middleware)
       localStorage.setItem('auth_token', data.access_token)
       localStorage.setItem('user', JSON.stringify(user))
+      document.cookie = `auth_token=${data.access_token}; path=/; max-age=${30 * 60}; SameSite=Lax`
 
       return true
     } catch (error) {
       console.error('Login error:', error)
-      return false
+      throw error
     }
   }
 
@@ -88,6 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(null)
     localStorage.removeItem('auth_token')
     localStorage.removeItem('user')
+    // Clear cookie
+    document.cookie = 'auth_token=; path=/; max-age=0'
   }
 
   const value: AuthContextType = {

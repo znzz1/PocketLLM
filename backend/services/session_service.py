@@ -185,3 +185,20 @@ class SessionService:
             return count
         finally:
             db.close()
+
+    def get_total_sessions_count(self) -> int:
+        """Get total number of sessions in the database."""
+        db = SessionLocal()
+        try:
+            return db.query(SessionModel).count()
+        finally:
+            db.close()
+
+    def get_total_users_count(self) -> int:
+        """Get total number of unique users with sessions."""
+        db = SessionLocal()
+        try:
+            from sqlalchemy import func
+            return db.query(func.count(func.distinct(SessionModel.user_id))).scalar()
+        finally:
+            db.close()

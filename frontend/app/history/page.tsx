@@ -121,105 +121,130 @@ export default function HistoryPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen" style={{ backgroundColor: '#F9FAFB' }}>
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          <h1 className="text-3xl font-bold" style={{ color: '#1E293B' }}>
             Chat History
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <p className="mt-2" style={{ color: '#64748B' }}>
             View and manage your conversation history
           </p>
           <button
             onClick={() => router.push('/')}
-            className="mt-4 text-blue-600 dark:text-blue-400 hover:underline"
+            className="mt-4 hover:underline"
+            style={{ color: '#4A90E2' }}
           >
             ← Back to Chat
           </button>
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-100 dark:bg-red-900/20 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-400 rounded-lg">
+          <div className="mb-4 p-4 rounded-lg" style={{ backgroundColor: '#FEF2F2', border: '1px solid #FCA5A5', color: '#DC2626' }}>
             {error}
           </div>
         )}
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="text-gray-600 dark:text-gray-400">Loading sessions...</div>
+            <div style={{ color: '#64748B' }}>Loading sessions...</div>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Sessions List */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            <div className="rounded-lg shadow-md p-6" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+              <h2 className="text-xl font-semibold mb-4" style={{ color: '#1E293B' }}>
                 Sessions ({sessions.length})
               </h2>
 
               {sessions.length === 0 ? (
-                <p className="text-gray-600 dark:text-gray-400">
+                <p style={{ color: '#64748B' }}>
                   No chat sessions yet. Start a conversation to create your first session!
                 </p>
               ) : (
                 <div className="space-y-3">
-                  {sessions.map((session) => (
-                    <div
-                      key={session.session_id}
-                      className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                        selectedSession?.session_id === session.session_id
-                          ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
-                      }`}
-                      onClick={() => fetchSessionDetails(session.session_id)}
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex-1">
-                          <p className="font-medium text-gray-900 dark:text-white">
-                            Session {session.session_id.slice(0, 8)}...
-                          </p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {session.messages.length} messages
-                          </p>
+                  {sessions.map((session) => {
+                    // Get first user message as title
+                    const firstUserMessage = session.messages.find(msg => msg.role === 'user')
+                    const title = firstUserMessage
+                      ? firstUserMessage.content.slice(0, 60) + (firstUserMessage.content.length > 60 ? '...' : '')
+                      : 'New Conversation'
+
+                    // Format time
+                    const timeAgo = new Date(session.updated_at).toLocaleDateString('en-US', {
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })
+
+                    return (
+                      <div
+                        key={session.session_id}
+                        className="p-4 rounded-lg cursor-pointer transition-colors"
+                        style={selectedSession?.session_id === session.session_id
+                          ? { border: '1px solid #4A90E2', backgroundColor: '#EAF3FF' }
+                          : { border: '1px solid #E2E8F0', backgroundColor: '#FFFFFF' }
+                        }
+                        onClick={() => fetchSessionDetails(session.session_id)}
+                        onMouseEnter={(e) => {
+                          if (selectedSession?.session_id !== session.session_id) {
+                            e.currentTarget.style.borderColor = '#CBD5E1'
+                          }
+                        }}
+                        onMouseLeave={(e) => {
+                          if (selectedSession?.session_id !== session.session_id) {
+                            e.currentTarget.style.borderColor = '#E2E8F0'
+                          }
+                        }}
+                      >
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1 min-w-0 pr-2">
+                            <p className="font-medium truncate" style={{ color: '#1E293B' }}>
+                              {title}
+                            </p>
+                            <p className="text-sm" style={{ color: '#64748B' }}>
+                              {session.messages.length} messages • {timeAgo}
+                            </p>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              deleteSession(session.session_id)
+                            }}
+                            className="text-sm flex-shrink-0 hover:opacity-80"
+                            style={{ color: '#DC2626' }}
+                          >
+                            Delete
+                          </button>
                         </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteSession(session.session_id)
-                          }}
-                          className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 text-sm"
-                        >
-                          Delete
-                        </button>
                       </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-500">
-                        Created: {new Date(session.created_at).toLocaleString()}
-                      </p>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
 
             {/* Session Details */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+            <div className="rounded-lg shadow-md p-6" style={{ backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0' }}>
+              <h2 className="text-xl font-semibold mb-4" style={{ color: '#1E293B' }}>
                 Session Details
               </h2>
 
               {!selectedSession ? (
-                <p className="text-gray-600 dark:text-gray-400">
+                <p style={{ color: '#64748B' }}>
                   Select a session to view details
                 </p>
               ) : (
                 <div className="space-y-4">
-                  <div className="border-b border-gray-200 dark:border-gray-700 pb-4">
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <div className="pb-4" style={{ borderBottom: '1px solid #E2E8F0' }}>
+                    <p className="text-sm" style={{ color: '#64748B' }}>
                       Session ID: {selectedSession.session_id}
                     </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className="text-sm" style={{ color: '#64748B' }}>
                       Created: {new Date(selectedSession.created_at).toLocaleString()}
                     </p>
-                    <p className="text-sm text-gray-600 dark:text-gray-400">
+                    <p className="text-sm" style={{ color: '#64748B' }}>
                       Updated: {new Date(selectedSession.updated_at).toLocaleString()}
                     </p>
                   </div>
@@ -228,26 +253,26 @@ export default function HistoryPage() {
                     {selectedSession.messages.map((message, index) => (
                       <div
                         key={index}
-                        className={`p-4 rounded-lg ${
-                          message.role === 'user'
-                            ? 'bg-blue-100 dark:bg-blue-900/20 ml-8'
-                            : 'bg-gray-100 dark:bg-gray-700 mr-8'
-                        }`}
+                        className={`p-4 rounded-lg ${message.role === 'user' ? 'ml-8' : 'mr-8'}`}
+                        style={message.role === 'user'
+                          ? { backgroundColor: '#FFFFFF', border: '1px solid #E2E8F0' }
+                          : { backgroundColor: '#F1F6FF', border: '1px solid #D4E8FF' }
+                        }
                       >
                         <div className="flex justify-between items-start mb-2">
-                          <p className="font-medium text-sm text-gray-900 dark:text-white">
+                          <p className="font-medium text-sm" style={{ color: '#1E293B' }}>
                             {message.role === 'user' ? 'You' : 'Assistant'}
                           </p>
                           {message.tokens_used && (
-                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                            <span className="text-xs" style={{ color: '#64748B' }}>
                               {message.tokens_used} tokens
                             </span>
                           )}
                         </div>
-                        <p className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap">
+                        <p className="whitespace-pre-wrap" style={{ color: '#1E293B' }}>
                           {message.content}
                         </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-500 mt-2">
+                        <p className="text-xs mt-2" style={{ color: '#64748B' }}>
                           {new Date(message.timestamp).toLocaleString()}
                         </p>
                       </div>
