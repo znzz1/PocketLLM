@@ -22,14 +22,14 @@ export default function SettingsPage() {
   const [isLoading, setIsLoading] = useState(false)
 
   const router = useRouter()
-  const { user, isAuthenticated, loading } = useAuth()
+  const { user, isAuthenticated, isLoading: authLoading } = useAuth()
 
   // Redirect if not authenticated
   useEffect(() => {
-    if (!loading && !isAuthenticated) {
+    if (!authLoading && !isAuthenticated) {
       router.push('/login?redirect=/settings')
     }
-  }, [isAuthenticated, loading, router])
+  }, [isAuthenticated, authLoading, router])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -91,7 +91,7 @@ export default function SettingsPage() {
     }
   }
 
-  if (loading || !isAuthenticated) {
+  if (authLoading || !isAuthenticated) {
     return null
   }
 
