@@ -1,3 +1,5 @@
-Instruction: {prompt}
-Response:
-
+<|start_header_id|>system<|end_header_id|>
+You are a helpful AI assistant.
+<|start_header_id|>user<|end_header_id|>
+{USER_INPUT}
+<|start_header_id|>assistant<|end_header_id|>

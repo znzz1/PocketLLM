@@ -6,7 +6,6 @@ from schemas.auth import TokenPayload
 from utils.dependencies import get_current_user
 from utils.prompt_builder import (
     build_prompt,
-    trim_conversation,
     load_system_prompt,
     build_cache_key
 )
@@ -26,7 +25,6 @@ async def send_message(
 ):
     deps.monitoring_service.increment_request_count()
 
-    # Create or get session
     session_id = request.session_id
     if not session_id:
         session_id = deps.session_service.create_session(current_user.sub)
@@ -37,7 +35,6 @@ async def send_message(
         if session.user_id != current_user.sub:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this session")
 
-    # Add user message to session
     deps.session_service.add_message(
         session_id=session_id,
         user_id=current_user.sub,
@@ -46,18 +43,17 @@ async def send_message(
         tokens_used=None
     )
 
-    # Get conversation history and trim
     session = deps.session_service.get_session(session_id)
     conversation_history = session.messages if session else []
-    conversation_history = trim_conversation(conversation_history[:-1])
 
-    # Load system prompt from prompt.txt
+    # -------------------------
+    # 只保留最近 x 条历史消息
+    # -------------------------
+    conversation_history = conversation_history[:-1][-3:]
+
     system_prompt = load_system_prompt("prompt.txt")
-
-    # Build formatted prompt
     formatted_prompt = build_prompt(conversation_history, system_prompt, request.prompt)
 
-    # Run LLM inference
     response_text, cached = deps.inference_service.infer(
         prompt=formatted_prompt,
         max_tokens=request.max_tokens,
@@ -67,7 +63,6 @@ async def send_message(
 
     tokens_used = len(response_text.split())
 
-    # Add assistant message
     deps.session_service.add_message(
         session_id=session_id,
         user_id=current_user.sub,
@@ -102,7 +97,7 @@ async def get_session_history(session_id: str, current_user: Annotated[TokenPayl
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
     if session.user_id != current_user.sub:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this session")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
     return session
 
@@ -131,9 +126,9 @@ async def send_message_stream(
     else:
         session = deps.session_service.get_session(session_id)
         if not session:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+            raise HTTPException(status_code=404, detail="Session not found")
         if session.user_id != current_user.sub:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied to this session")
+            raise HTTPException(status_code=403, detail="Access denied to this session")
 
     deps.session_service.add_message(
         session_id=session_id,
@@ -145,12 +140,13 @@ async def send_message_stream(
 
     session = deps.session_service.get_session(session_id)
     conversation_history = session.messages if session else []
-    conversation_history = trim_conversation(conversation_history[:-1])
 
-    # Load system prompt from prompt.txt
+    # -------------------------
+    # 只保留最近 5 条历史消息
+    # -------------------------
+    conversation_history = conversation_history[:-1][-5:]
+
     system_prompt = load_system_prompt("prompt.txt")
-
-    # Build formatted prompt
     formatted_prompt = build_prompt(conversation_history, system_prompt, request.prompt)
 
     async def generate_stream():
@@ -160,11 +156,10 @@ async def send_message_stream(
 
         yield f"data: {json.dumps({'type': 'start', 'session_id': session_id, 'message_id': message_id})}\n\n"
 
-        # ✅ FIXED: add prev_response=None
         cache_key = build_cache_key(
             current_user.sub,
             session_id,
-            request.prompt,
+            formatted_prompt,
             prev_response=None
         )
 
