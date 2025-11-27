@@ -1,6 +1,5 @@
 'use client'
-
-import { createContext, useContext, useState, ReactNode, useRef } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode, useRef } from 'react'
 
 /**
  * ChatContext - Global Chat State with Stop Functionality
@@ -200,6 +199,32 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     setSessionId(null)
     stopGenerating() // Stop any ongoing generation
   }
+
+  // Clear chat state and any local persistence on global logout
+  const clearAllChatState = () => {
+    try {
+      setMessages([])
+      setSessionId(null)
+      // Remove any chat-related localStorage keys if present
+      try {
+        localStorage.removeItem('current_session')
+        localStorage.removeItem('messages')
+        localStorage.removeItem('conversations')
+      } catch {}
+    } catch {}
+  }
+
+  useEffect(() => {
+    const onAuthLogout = () => clearAllChatState()
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth:logout', onAuthLogout)
+    }
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('auth:logout', onAuthLogout)
+      }
+    }
+  }, [])
 
   const loadSession = (newSessionId: string, newMessages: Message[]) => {
     setSessionId(newSessionId)

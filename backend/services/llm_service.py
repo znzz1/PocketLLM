@@ -11,8 +11,6 @@ except ImportError:
 
 
 class LLMEngine:
-    """Wrapper for llama.cpp inference engine."""
-
     def __init__(self):
         self.model: Optional[Llama] = None
         self.model_loaded = False
@@ -35,23 +33,25 @@ class LLMEngine:
                 n_ctx=settings.MODEL_N_CTX,
                 n_threads=settings.MODEL_N_THREADS,
                 n_gpu_layers=settings.MODEL_N_GPU_LAYERS,
+                n_batch=settings.MODEL_N_BATCH,
+                add_bos_token=True,
                 verbose=True
             )
             self.model_loaded = True
-            print("✅ Model loaded successfully.")
+            print("Model loaded successfully.")
             return True
         except Exception as e:
             import traceback
-            print(f"❌ Failed to load model: {e}")
+            print(f"Failed to load model: {e}")
             traceback.print_exc()
             self.model_loaded = False
             return False
 
     def generate(
-        self, 
-        prompt: str, 
-        max_tokens: Optional[int] = None, 
-        temperature: Optional[float] = None, 
+        self,
+        prompt: str,
+        max_tokens: Optional[int] = None,
+        temperature: Optional[float] = None,
         stream: bool = False
     ) -> str | Iterator[str]:
 
@@ -62,19 +62,11 @@ class LLMEngine:
             output = self.model(
                 prompt,
                 max_tokens=max_tokens or settings.MODEL_MAX_TOKENS,
-                temperature=temperature or settings.MODEL_TEMPERATURE,
+                temperature=temperature if temperature is not None else settings.MODEL_TEMPERATURE,
                 top_p=settings.MODEL_TOP_P,
                 echo=False,
                 stream=stream,
-
-                # ⬇️ 新 stop tokens（非常关键）
-                stop=[
-                    "<|im_start|>user",
-                    "<|im_start|>assistant",
-                    "<|im_end|>",
-                    "</s>",
-                ],
-
+                stop=["<|eot_id|>"],
                 repeat_penalty=1.1
             )
 
@@ -96,14 +88,11 @@ class LLMEngine:
 
         for chunk in output:
             token = chunk['choices'][0]['text']
-
-            # ⬇️ 屏蔽 DeepSeek R1 的内部推理 token
             if not token or token.strip().lower() in ["<think>", "</think>"]:
                 continue
 
             full_text += token
 
-            # 第1个 token 要清洗前缀
             if first_token:
                 buffer += token
                 cleaned = self._clean_response(buffer)
@@ -120,9 +109,8 @@ class LLMEngine:
             return text
 
         text = re.sub(r"(?is)<think>.*?</think>", "", text)
-
-        text = re.sub(r"</\|im_end>>", "", text)
-        text = re.sub(r"<\|im_end\|>", "", text)
+        text = re.sub(r"<\|eot_id\|>", "", text)
+        text = re.sub(r"</s>", "", text)
 
         lines = [l.strip() for l in text.split("\n") if l.strip()]
 
@@ -146,17 +134,20 @@ class LLMEngine:
 
         return "\n".join(final).strip()
 
-
     def _mock_generate(self, prompt: str, stream: bool) -> str | Iterator[str]:
         user_query = "your question"
-        if "<|user|>" in prompt:
-            parts = prompt.split("<|user|>")
+        marker = "<|start_header_id|>user<|end_header_id|>"
+        if marker in prompt:
+            parts = prompt.split(marker)
             if len(parts) > 1:
-                last_user_msg = parts[-1].split("</s>")[0].strip()
+                tail = parts[-1]
+                if "<|eot_id|>" in tail:
+                    tail = tail.split("<|eot_id|>")[0]
+                last_user_msg = tail.strip()
                 if last_user_msg:
                     user_query = last_user_msg[:50]
 
-        response = f"[FAIL TO LOAD MODEL] Could not process: '{user_query}'. The actual LLM model is not loaded."
+        response = f"[MODEL NOT LOADED] Could not process: '{user_query}'."
 
         if stream:
             words = response.split(' ')
@@ -175,6 +166,7 @@ class LLMEngine:
             "n_ctx": settings.MODEL_N_CTX,
             "n_threads": settings.MODEL_N_THREADS,
             "n_gpu_layers": settings.MODEL_N_GPU_LAYERS,
+            "n_batch": settings.MODEL_N_BATCH,
             "temperature": settings.MODEL_TEMPERATURE,
             "top_p": settings.MODEL_TOP_P,
             "max_tokens": settings.MODEL_MAX_TOKENS
