@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { useAuth } from '@/hooks/useAuth'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 
 /**
  * NavigationBar Component
@@ -16,6 +16,7 @@ import { usePathname } from 'next/navigation'
 export default function NavigationBar() {
   const { isAuthenticated, user, logout } = useAuth()
   const pathname = usePathname()
+  const router = useRouter()
 
   const isActive = (path: string) => pathname === path
 
@@ -90,7 +91,13 @@ export default function NavigationBar() {
                 <div className="flex items-center space-x-3 ml-6 pl-6" style={{ borderLeft: '1px solid #E2E8F0' }}>
                   <span className="text-sm" style={{ color: '#475569' }}>{user?.username}</span>
                   <button
-                    onClick={logout}
+                    onClick={() => {
+                      try {
+                        logout()
+                      } finally {
+                        router.replace('/login')
+                      }
+                    }}
                     className="px-3 py-1.5 text-sm font-medium rounded-md transition-colors"
                     style={{ color: '#475569', border: '1px solid #CBD5E1', backgroundColor: '#FFFFFF' }}
                     onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#F2F4F7'}

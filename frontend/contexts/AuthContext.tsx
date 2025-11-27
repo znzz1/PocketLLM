@@ -80,6 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('user', JSON.stringify(user))
       document.cookie = `auth_token=${data.access_token}; path=/; max-age=${30 * 60}; SameSite=Lax`
 
+      // Notify other contexts that login happened so they can (re)initialize
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth:login'))
+      }
+
       return true
     } catch (error) {
       console.error('Login error:', error)
@@ -88,12 +93,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const logout = () => {
+    // Best-effort backend logout (ignore errors)
+    try {
+      fetch('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    } catch {}
+
+    // Clear in-memory state
     setUser(null)
     setToken(null)
-    localStorage.removeItem('auth_token')
-    localStorage.removeItem('user')
-    // Clear cookie
-    document.cookie = 'auth_token=; path=/; max-age=0'
+
+    // Remove known localStorage keys used by auth
+    try {
+      localStorage.removeItem('auth_token')
+      localStorage.removeItem('user')
+    } catch {}
+
+    // Clear cookie used by middleware
+    document.cookie = 'auth_token=; path=/; max-age=0; SameSite=Lax'
+
+    // Clear Cache API (best-effort)
+    if (typeof window !== 'undefined' && 'caches' in window) {
+      caches.keys().then((names) => Promise.all(names.map((n) => caches.delete(n)))).catch(() => {})
+    }
+
+    // Notify other contexts to clear transient state (e.g. ChatContext)
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('auth:logout'))
+    }
   }
 
   const value: AuthContextType = {
