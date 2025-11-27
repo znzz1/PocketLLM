@@ -1,18 +1,19 @@
 import { useChatContext } from '@/contexts/ChatContext'
 
 /**
- * useChat Hook
+ * useChat Hook with Stop Functionality
  *
  * Architecture Reference: HW3 Class Diagram - useChat
  * - Custom React Hook for chat functionality
- * - Manages chat state and WebSocket connection (future)
- * - Provides message sending operations
+ * - Manages chat state and streaming connection
+ * - Provides message sending and stopping operations
  *
  * Attributes:
- * - wsClient: WebSocketClient (future implementation)
+ * - abortController: AbortController (for canceling requests)
  *
  * Methods:
  * - sendMessage(text): Promise<void>
+ * - stopGenerating(): void
  * - subscribeToMessages(callback): void
  * - disconnect(): void
  */
@@ -23,6 +24,7 @@ export function useChat() {
     sessionId,
     isLoading,
     sendMessage,
+    stopGenerating,
     addMessage,
     clearMessages,
   } = useChatContext()
@@ -34,10 +36,10 @@ export function useChat() {
     sendMessage: async (text: string) => {
       await sendMessage(text)
     },
+    stopGenerating: () => {
+      stopGenerating()
+    },
     addMessage,
     clearMessages,
-    // Future: WebSocket support
-    // subscribeToMessages: (callback: Function) => {},
-    // disconnect: () => {},
   }
 }

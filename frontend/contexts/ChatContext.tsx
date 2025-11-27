@@ -1,15 +1,16 @@
 'use client'
 
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, ReactNode, useRef } from 'react'
 
 /**
- * ChatContext - Global Chat State
+ * ChatContext - Global Chat State with Stop Functionality
  *
  * Architecture Reference: HW3 Section 3.1.2 State Management
  * Architecture Reference: HW3 Section 3.2.2 Real-time Streaming (SSE through BFF)
  * - React Context API for chat state
  * - Manages messages and session via Server-Sent Events
  * - Provides real-time chat operations through Next.js BFF layer
+ * - Supports aborting streaming responses
  */
 
 export interface Message {
@@ -24,6 +25,7 @@ interface ChatContextType {
   sessionId: string | null
   isLoading: boolean
   sendMessage: (content: string) => Promise<void>
+  stopGenerating: () => void
   addMessage: (message: Message) => void
   clearMessages: () => void
   setSessionId: (id: string) => void
@@ -36,6 +38,17 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  
+  // AbortController ref to cancel streaming requests
+  const abortControllerRef = useRef<AbortController | null>(null)
+
+  const stopGenerating = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+      abortControllerRef.current = null
+      setIsLoading(false)
+    }
+  }
 
   const sendMessage = async (content: string) => {
     if (!content.trim()) return
@@ -50,6 +63,10 @@ export function ChatProvider({ children }: { children: ReactNode }) {
 
     setMessages((prev) => [...prev, userMessage])
     setIsLoading(true)
+
+    // Create new AbortController for this request
+    const abortController = new AbortController()
+    abortControllerRef.current = abortController
 
     try {
       // Create placeholder for assistant message
@@ -74,6 +91,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
           prompt: content,
           session_id: sessionId || undefined,
         }),
+        signal: abortController.signal, // Pass abort signal
       })
 
       if (!response.ok) {
@@ -137,21 +155,39 @@ export function ChatProvider({ children }: { children: ReactNode }) {
         }
       }
     } catch (error) {
-      console.error('Send message error:', error)
+      if (error instanceof Error && error.name === 'AbortError') {
+        // Request was aborted by user
+        console.log('Generation stopped by user')
+        
+        // Update last message to indicate it was stopped
+        setMessages((prev) => {
+          const lastMessage = prev[prev.length - 1]
+          if (lastMessage && lastMessage.role === 'assistant') {
+            return prev.slice(0, -1).concat({
+              ...lastMessage,
+              content: lastMessage.content + '\n\n[Generation stopped]',
+            })
+          }
+          return prev
+        })
+      } else {
+        console.error('Send message error:', error)
 
-      // Update last message with error
-      setMessages((prev) => {
-        const lastMessage = prev[prev.length - 1]
-        if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.content) {
-          return prev.slice(0, -1).concat({
-            ...lastMessage,
-            content: 'Sorry, I encountered an error. Please try again.',
-          })
-        }
-        return prev
-      })
+        // Update last message with error
+        setMessages((prev) => {
+          const lastMessage = prev[prev.length - 1]
+          if (lastMessage && lastMessage.role === 'assistant' && !lastMessage.content) {
+            return prev.slice(0, -1).concat({
+              ...lastMessage,
+              content: 'Sorry, I encountered an error. Please try again.',
+            })
+          }
+          return prev
+        })
+      }
     } finally {
       setIsLoading(false)
+      abortControllerRef.current = null
     }
   }
 
@@ -162,6 +198,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
   const clearMessages = () => {
     setMessages([])
     setSessionId(null)
+    stopGenerating() // Stop any ongoing generation
   }
 
   const loadSession = (newSessionId: string, newMessages: Message[]) => {
@@ -174,6 +211,7 @@ export function ChatProvider({ children }: { children: ReactNode }) {
     sessionId,
     isLoading,
     sendMessage,
+    stopGenerating,
     addMessage,
     clearMessages,
     setSessionId,

@@ -3,11 +3,12 @@
 import { useState, KeyboardEvent } from 'react'
 
 /**
- * InputBox Component
+ * InputBox Component with Stop Button
  *
  * Architecture Reference: HW3 Class Diagram - InputBox
  * - Chat input field component (Client Component)
  * - Handles user text input and submission
+ * - Provides stop button when generating
  *
  * Attributes:
  * - value: String
@@ -16,15 +17,17 @@ import { useState, KeyboardEvent } from 'react'
  * Methods:
  * - handleChange(event): void
  * - handleSubmit(event): void
+ * - handleStop(): void
  * - clear(): void
  */
 
 interface InputBoxProps {
   onSend: (content: string) => Promise<void>
+  onStop: () => void
   isLoading: boolean
 }
 
-export default function InputBox({ onSend, isLoading }: InputBoxProps) {
+export default function InputBox({ onSend, onStop, isLoading }: InputBoxProps) {
   const [value, setValue] = useState('')
 
   const handleChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -36,6 +39,10 @@ export default function InputBox({ onSend, isLoading }: InputBoxProps) {
 
     await onSend(value)
     clear()
+  }
+
+  const handleStop = () => {
+    onStop()
   }
 
   const clear = () => {
@@ -77,36 +84,60 @@ export default function InputBox({ onSend, isLoading }: InputBoxProps) {
             rows={1}
             disabled={isLoading}
           />
-          <button
-            onClick={handleSubmit}
-            disabled={isLoading || !value.trim()}
-            className="absolute right-2 bottom-2 p-2 rounded-md transition-colors"
-            style={
-              isLoading || !value.trim()
-                ? { color: '#CBD5E1', cursor: 'not-allowed' }
-                : { color: '#4A90E2' }
-            }
-            onMouseEnter={(e) => {
-              if (!isLoading && value.trim()) {
-                e.currentTarget.style.backgroundColor = '#EAF3FF'
+          
+          {/* Send/Stop Button */}
+          {isLoading ? (
+            <button
+              onClick={handleStop}
+              className="absolute right-2 bottom-2 p-2 rounded-md transition-colors"
+              style={{ color: '#DC2626', backgroundColor: '#FEF2F2' }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#FEE2E2'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#FEF2F2'
+              }}
+              title="Stop generating"
+            >
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="6" width="12" height="12" rx="1" />
+              </svg>
+            </button>
+          ) : (
+            <button
+              onClick={handleSubmit}
+              disabled={!value.trim()}
+              className="absolute right-2 bottom-2 p-2 rounded-md transition-colors"
+              style={
+                !value.trim()
+                  ? { color: '#CBD5E1', cursor: 'not-allowed' }
+                  : { color: '#4A90E2' }
               }
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = 'transparent'
-            }}
-          >
-            {isLoading ? (
-              <div className="w-5 h-5 rounded-full animate-spin" style={{ border: '2px solid #CBD5E1', borderTopColor: '#4A90E2' }}></div>
-            ) : (
+              onMouseEnter={(e) => {
+                if (value.trim()) {
+                  e.currentTarget.style.backgroundColor = '#EAF3FF'
+                }
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent'
+              }}
+              title="Send message"
+            >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
               </svg>
-            )}
-          </button>
+            </button>
+          )}
         </div>
+        
+        {/* Status Text */}
         <div className="mt-2 flex items-center justify-between text-xs" style={{ color: '#64748B' }}>
           <span>Press Enter to send, Shift+Enter for new line</span>
-          {isLoading && <span style={{ color: '#4A90E2' }}>Generating response...</span>}
+          {isLoading ? (
+            <span style={{ color: '#DC2626' }}>
+              Click stop button to cancel
+            </span>
+          ) : null}
         </div>
       </div>
     </div>

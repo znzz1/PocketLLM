@@ -36,9 +36,15 @@ def trim_conversation(messages: List, max_tokens: int = MAX_HISTORY_TOKENS):
 def load_system_prompt(path="prompt.txt") -> str:
     try:
         with open(path, "r", encoding="utf-8") as f:
-            return f.read().strip()
+            content = f.read().strip()
+            # Remove the template placeholders if they exist
+            content = content.replace("Instruction: {prompt}", "").strip()
+            content = content.replace("Response:", "").strip()
+            if not content:
+                return "You are a helpful AI assistant."
+            return content
     except:
-        return "You are a helpful assistant."
+        return "You are a helpful AI assistant."
 
 
 # ===============================
@@ -55,10 +61,20 @@ def fmt_chat(role: str, content: str) -> str:
 # ===============================
 
 def build_prompt(messages: List, system_prompt: str, new_user_prompt: str) -> str:
-    # system header
+    """Build a properly formatted prompt for the model.
+    
+    Args:
+        messages: List of previous conversation messages
+        system_prompt: System instructions for the model
+        new_user_prompt: The new user message to respond to
+        
+    Returns:
+        Formatted prompt string ready for model inference
+    """
+    # Start with system message
     prompt = fmt_chat("system", system_prompt)
 
-    # history
+    # Add conversation history
     for msg in messages:
         role = msg.role
         content = (msg.content or "").strip()
@@ -66,10 +82,10 @@ def build_prompt(messages: List, system_prompt: str, new_user_prompt: str) -> st
             continue
         prompt += fmt_chat(role, content)
 
-    # new user message
+    # Add new user message
     prompt += fmt_chat("user", new_user_prompt.strip())
 
-    # assistant start
+    # Start assistant response
     prompt += "<|im_start|>assistant\n"
 
     return prompt
@@ -80,6 +96,7 @@ def build_prompt(messages: List, system_prompt: str, new_user_prompt: str) -> st
 # ===============================
 
 def build_cache_key(user_id: str, session_id: str, prompt: str, prev_response: str | None = None) -> str:
+    """Build a cache key for storing/retrieving cached responses."""
     import json
     cache_key = json.dumps({
         "user_id": user_id,
@@ -88,4 +105,3 @@ def build_cache_key(user_id: str, session_id: str, prompt: str, prev_response: s
         "prev_response": prev_response.strip() if prev_response else None
     }, sort_keys=True)
     return cache_key
-
