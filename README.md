@@ -65,7 +65,7 @@ Built following the **Layered + Client-Server hybrid architecture** from CSCI 57
 - **Next.js App Router**: Modern file-based routing with SSR
 - **Backend-for-Frontend (BFF) Pattern**: Next.js API routes abstract backend complexity
 - **Containerized Deployment**: Docker containers for deployment isolation (not microservices)
-- **CPU-Optimized Inference**: llama.cpp with 4-bit quantization for TinyLlama model
+- **CPU-Optimized Inference**: llama.cpp with 3-bit quantization for Llama-3-8B model
 
 ### Resource Constraints
 
@@ -100,9 +100,9 @@ Designed to run within strict resource limits:
   - Message history persistence
 
 - **LLM Inference**
-  - TinyLlama-1.1B-Chat (4-bit quantized, 638MB model)
+  - Meta-Llama-3-8B-Instruct (3-bit quantized, ~3.5GB model)
   - CPU-optimized inference via llama.cpp
-  - Configurable temperature, top-p, max tokens
+  - Temperature: 0.0, Top-P: 1.0, Max Tokens: 1024, Context: 4096
 
 - **Response Caching**
   - Redis-based LRU cache (256MB limit)
@@ -151,78 +151,166 @@ Designed to run within strict resource limits:
 - **Authentication**: python-jose (JWT), passlib (bcrypt)
 
 ### LLM Inference
-- **Model**: TinyLlama-1.1B-Chat (4-bit quantized GGUF)
-- **Inference Engine**: llama-cpp-python 0.2.20
-- **Quantization**: 4-bit (Q4_K_M) for 638MB model size
-- **Context Window**: 2048 tokens
+- **Model**: Meta-Llama-3-8B-Instruct (3-bit quantized GGUF)
+- **Model Size**: ~3.5 GB
+- **Inference Engine**: llama-cpp-python 0.3.2+
+- **Quantization**: Q3_K_M (3-bit mixed quantization)
+- **Context Window**: 4096 tokens
+- **Inference Threads**: 4 (configurable via environment)
 
 ### Deployment
 - **Containerization**: Docker 20.10+
 - **Orchestration**: Docker Compose 2.0+
 - **Base Images**:
-  - Frontend: `node:20-alpine` (224 MB final image)
-  - Backend: `python:3.11-slim` (1.99 GB with model)
+  - Frontend: `node:20-alpine` (~224 MB final image)
+  - Backend: `python:3.11-slim` (~4.5 GB with Llama-3-8B model)
   - Cache: `redis:7-alpine`
 
 ## Quick Start
 
-### Prerequisites
+Choose your preferred deployment method:
 
-- **Docker**: 20.10+ (with Docker Compose)
-- **System**: 4 vCPUs, 16 GB RAM
-- **OS**: Linux, macOS, or Windows (with WSL2)
+### Option 1: Docker Deployment (Recommended)
 
-### Download the Model
+**Best for**: Production deployment, testing, and quick setup
 
-Before deployment, download the TinyLlama model (638MB):
+**Prerequisites:**
+- Docker 20.10+ with Docker Compose
+- 4 vCPUs, 16 GB RAM minimum
+- Linux, macOS, or Windows with WSL2
 
-```bash
-# Create models directory
-mkdir -p models
-
-# Download the quantized GGUF model from Hugging Face
-wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf -O models/tinyllama-1.1b-chat-q4.gguf
-
-# Alternative: using curl
-curl -L https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf -o models/tinyllama-1.1b-chat-q4.gguf
-
-# Verify the download (should be ~638MB)
-ls -lh models/
-```
-
-**Model Details:**
-- **Name**: TinyLlama-1.1B-Chat (4-bit quantized)
-- **Size**: 638 MB
-- **Format**: GGUF (Q4_K_M quantization)
-- **Source**: [TheBloke on Hugging Face](https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF)
-
-### One-Command Deployment
+**Steps:**
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone <repository-url>
 cd PocketLLM
 
-# Download the model (if not already done)
-mkdir -p models && wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf -O models/tinyllama-1.1b-chat-q4.gguf
+# 2. Build and start all services (Docker will auto-download the model)
+docker-compose up -d --build
 
-# Start all services
-docker-compose up -d
-
-# View logs
-docker-compose logs -f
+# 3. Monitor logs (first build takes ~15-20 minutes)
+docker-compose logs -f backend
 ```
 
-**Access Points:**
+**What happens during build:**
+- Frontend and backend Docker images are built
+- **Meta-Llama-3-8B-Instruct** model (~3.5GB) is automatically downloaded during backend build
+- All dependencies are installed and services start
+
+**Access the application:**
 - **Frontend**: http://localhost:3000
 - **Backend API**: http://localhost:8000
-- **API Documentation**: http://localhost:8000/docs
+- **API Docs**: http://localhost:8000/docs
 
-**Default Credentials:**
-- **Admin**: `admin` / `admin123`
-- **User**: `user` / `user123`
+**Default credentials:**
+- Admin: `admin` / `admin123`
+- User: `user` / `user123`
 
-**Note**: For first-time deployment, building images takes ~10-15 minutes due to llama-cpp compilation. Subsequent starts are instant.
+**Model information (Docker):**
+- **Name**: Meta-Llama-3-8B-Instruct
+- **Size**: ~3.5 GB
+- **Quantization**: Q3_K_M (3-bit mixed)
+- **Source**: [QuantFactory/Meta-Llama-3-8B-Instruct-GGUF](https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF)
+- **Location**: Embedded in Docker image at `/app/models/model.gguf`
+
+---
+
+### Option 2: Local Development Setup
+
+**Best for**: Development, debugging, and customization
+
+**Prerequisites:**
+- Node.js 18+ and npm
+- Python 3.11+
+- Redis (optional - backend will use in-memory cache if unavailable)
+- ~4 GB free disk space for LLM model
+
+**Steps:**
+
+**1. Clone the repository**
+```bash
+git clone <repository-url>
+cd PocketLLM
+```
+
+**2. Download a model** (choose one based on your system)
+
+```bash
+# Option A: Llama-3-8B (same as Docker, ~3.5GB, better quality)
+mkdir -p models
+curl -L "https://huggingface.co/QuantFactory/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct.Q3_K_M.gguf" \
+  -o models/model.gguf
+
+# Option B: Smaller model for testing (use any GGUF model)
+# You can use any compatible GGUF model file
+```
+
+**3. Setup Backend** (Terminal 1)
+```bash
+cd backend
+
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Create environment file
+cat > .env << EOF
+ENVIRONMENT=development
+DEBUG=true
+MODEL_PATH=../models/model.gguf
+MODEL_N_CTX=4096
+MODEL_N_THREADS=4
+MODEL_TEMPERATURE=0.0
+MODEL_MAX_TOKENS=1024
+REDIS_HOST=localhost
+REDIS_PORT=6379
+DATABASE_URL=sqlite:///./pocketllm.db
+SECRET_KEY=dev-secret-key-change-in-production
+EOF
+
+# Run development server
+python main.py
+```
+
+Backend will be available at http://localhost:8000
+
+**4. Setup Frontend** (Terminal 2)
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Create environment file
+cat > .env.local << EOF
+NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_WS_URL=ws://localhost:8000
+EOF
+
+# Run development server
+npm run dev
+```
+
+Frontend will be available at http://localhost:3000
+
+**5. Optional: Start Redis** (Terminal 3)
+```bash
+# Using Docker
+docker run -d --name redis -p 6379:6379 redis:7-alpine
+
+# OR install Redis locally and run
+redis-server
+```
+
+**Note**: Redis is optional. The backend will automatically fall back to in-memory caching if Redis is unavailable.
+
+**Access the application:**
+- Frontend: http://localhost:3000
+- Backend API: http://localhost:8000/docs
 
 ## Docker Deployment
 
@@ -335,66 +423,7 @@ docker stats pocketllm-backend-1 pocketllm-frontend-1
 
 For detailed Docker deployment instructions, see [DOCKER_DEPLOYMENT.md](./DOCKER_DEPLOYMENT.md).
 
-## Development Setup
-
-For local development without Docker:
-
-### Frontend Setup
-
-```bash
-cd frontend
-
-# Install dependencies
-npm install
-
-# Run development server
-npm run dev
-
-# Frontend available at http://localhost:3000
-```
-
-### Backend Setup
-
-```bash
-cd backend
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Download model (if not present in models/ directory)
-mkdir -p ../models
-wget https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf -O ../models/tinyllama-1.1b-chat-q4.gguf
-
-# Run development server
-python main.py
-
-# Backend available at http://localhost:8000
-```
-
-### Environment Variables
-
-Create `.env` files for local development:
-
-**Frontend** (`frontend/.env.local`):
-```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
-NEXT_PUBLIC_WS_URL=ws://localhost:8000
-```
-
-**Backend** (`backend/.env`):
-```env
-ENVIRONMENT=development
-DEBUG=true
-MODEL_PATH=../models/tinyllama-1.1b-chat-q4.gguf
-REDIS_HOST=localhost
-REDIS_PORT=6379
-DATABASE_URL=sqlite:///./pocketllm.db
-SECRET_KEY=dev-secret-key-change-in-production
-```
+> **Note**: For local development setup, see [Option 2: Local Development Setup](#option-2-local-development-setup) in the Quick Start section above.
 
 ## Project Structure
 
@@ -439,8 +468,8 @@ PocketLLM/
 │   ├── Dockerfile.frontend# Frontend multi-stage build
 │   └── deploy.sh          # Deployment automation script
 │
-├── models/                # LLM model files (not in Git)
-│   └── tinyllama-1.1b-chat-q4.gguf  # 638MB GGUF model
+├── models/                # LLM model files (not in Git, for local dev only)
+│   └── model.gguf         # User-provided GGUF model (~3.5GB for Llama-3-8B)
 │
 ├── docker-compose.yml     # Service orchestration
 ├── .dockerignore          # Docker build exclusions
@@ -516,13 +545,13 @@ Response:
 ```json
 Response:
 {
-  "model_path": "/app/models/tinyllama-1.1b-chat-q4.gguf",
+  "model_path": "/app/models/model.gguf",
   "model_loaded": true,
-  "context_length": 2048,
+  "context_length": 4096,
   "parameters": {
-    "temperature": 0.7,
-    "top_p": 0.95,
-    "max_tokens": 512
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "max_tokens": 1024
   }
 }
 ```
@@ -537,12 +566,12 @@ All backend settings are in [`backend/config.py`](backend/config.py) and can be 
 
 ```python
 # LLM Model Settings
-MODEL_PATH: str = "./models/tinyllama-1.1b-chat-q4.gguf"
-MODEL_N_CTX: int = 2048          # Context window
-MODEL_N_THREADS: int = 4         # CPU threads
-MODEL_TEMPERATURE: float = 0.7   # Sampling temperature
-MODEL_TOP_P: float = 0.95        # Nucleus sampling
-MODEL_MAX_TOKENS: int = 512      # Max response tokens
+MODEL_PATH: str = "/app/models/model.gguf"  # Docker path
+MODEL_N_CTX: int = 4096          # Context window
+MODEL_N_THREADS: int = 4         # Inference threads
+MODEL_TEMPERATURE: float = 0.0   # Sampling temperature
+MODEL_TOP_P: float = 1.0         # Nucleus sampling
+MODEL_MAX_TOKENS: int = 1024     # Max response tokens
 
 # Redis Cache Settings
 REDIS_HOST: str = "localhost"    # Docker: "redis"
@@ -604,10 +633,12 @@ Expected response: `{"status":"healthy",...}`
 
 USC CSCI 578 - Software Architecture - Fall 2025
 
-- [Team Member 1]
-- [Team Member 2]
-- [Team Member 3]
-- [Team Member 4]
+- Hu, Jiabao
+- Ji, Samuel
+- Santosa, Gregory
+- Yang, Yifei
+- Zhang, Aiyu
+- Zhu, Ning
 
 ## License
 
@@ -643,9 +674,9 @@ Academic Use Only - Not for Commercial Distribution
    ```
 
 3. **Model File Not Found**
-   - The model is embedded in the Docker image
+   - The model is embedded in the Docker image (auto-downloaded during build)
    - Verify: `docker-compose exec backend ls -lh /app/models/`
-   - Expected: `638M tinyllama-1.1b-chat-q4.gguf`
+   - Expected: `~3.5G model.gguf` (Meta-Llama-3-8B-Instruct)
 
 4. **Redis Connection Failed**
    - Backend will fall back to in-memory cache
